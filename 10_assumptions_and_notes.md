@@ -21,10 +21,8 @@ I used Claude Code (Anthropic) as a design partner throughout, in one working se
 
 - **Mine:** reading the brief; the core modelling idea (facts keep agency identifiers, a versioned bridge maps them to our sites, merges change the bridge and never the facts); choosing PostgreSQL as the operational system of record over Snowflake after weighing both; deciding where to go deep (identity, history, S4 handling) and where to stay shallow; removing tables I could not justify (a separate decision log, a raw-event table, a source dimension); pushing until every table could be explained in plain language.
 - **Claude's:** turning those decisions into DDL, diagrams and written sections; drafting Parts B, C and D for me to edit; generating the sample-data SQL from the brief; running the DDL, sample data and the U2/U3/U4 queries on a local PostgreSQL 17 and capturing the output; catching my misunderstandings (source vs store, engine vs store) and correcting its own (an overstated claim about Snowflake transactions, fixed in Part B).
-- **Verified:** all DDL and queries were executed on PostgreSQL 17 with the brief's sample rows; results are in the appendix (U3 returns VAI for 2026-10-08 and OAI for 2026-10-13; U2 returns cust_042; the duplicate S4 event is a no-op).
-
 Every design choice in this document is one I can explain and defend without the tool.
 
 ## Time spent
 
-About **3 hours**: data model and DDL 1 to 1.5 hours (including the queries and running them), pipeline architecture and rationale about 1.5 hours, with reading the brief and assembling the document inside that time.
+About **3.5 to 4 hours**: reading the brief about 30 minutes, data model and DDL 1 to 1.5 hours (including the queries and running them on PostgreSQL), pipeline architecture and rationale about 1.5 hours, assembling the document the remainder.

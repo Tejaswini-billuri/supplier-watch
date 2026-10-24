@@ -21,7 +21,7 @@ Postgres is the operational database of the product, the same role the customer 
 | OpenSearch | One document per letter with tags and facets | Full-text search (U5) |
 | Snowflake | Nightly flattened star | Aggregates (U4) |
 
-**Trade-off.** One more database than the alternative I weighed seriously, Snowflake as the sole system of record (S3 → Snowpipe → dbt snapshots → marts, DynamoDB for alerts). Accepted because the brief ranks a wrong merge as the worst outcome, and "the database refuses the write" beats "a test would have caught it"; I would revisit it if the app stopped reading the model directly. Engines (Flink, Spark) are a separate question from stores; at today's volumes they add a 24/7 cost without changing the design, so processing is SQL, Python on Fargate, and Lambda. They are the upgrade path at 10x.
+**Trade-off.** One more database than a Snowflake-only design (§5). Accepted because the brief ranks a wrong merge as the worst outcome, and "the database refuses the write" beats "a test would have caught it". Engines (Flink, Spark) are a separate question from stores; at today's volumes they add a 24/7 cost without changing the design, so processing is SQL, Python on Fargate, and Lambda. They are the upgrade path at 10x.
 
 ## 2. History and time
 
@@ -72,3 +72,6 @@ Every bridge row records method, score, evidence and the rules version, so a ste
 
 Who pays for the snowflake: U1 (one extra join, hidden behind a view). Who never sees it: U2, U4, U5, whose copies are flattened at publish time. Who it exists for: U6.
 
+## 5. Alternative considered and rejected
+
+**Snowflake as the sole system of record**: S3 → Snowpipe → staging → dbt snapshots for SCD2 → marts, with DynamoDB for watchers and alerts. All on the stated stack, one database fewer. Rejected because (1) the one-identifier-one-site rule and the primary keys are declared but not enforced in a warehouse, so a bad matching run corrupts the bridge silently; (2) the customer app reads the model for U1, and a warehouse serving sub-second reads must stay running; (3) S4/S5 are thousands of small per-event writes, which a columnar engine handles poorly. I would revisit it if the app stopped reading the model directly and the stream path wrote only to DynamoDB; the DDL is the same, constraints become tests.
