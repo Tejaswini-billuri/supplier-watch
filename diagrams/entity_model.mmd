@@ -1,0 +1,139 @@
+---
+title: Supplier Watch — Entity model (12 tables)
+---
+erDiagram
+    %% Facts reach a site only through the bridge. The bridge and the facts are SCD2.
+
+    dim_site ||--o{ dim_site_identifier : "owns identifiers"
+    dim_site_identifier }o--o{ fact_inspection : "FEI"
+    dim_site_identifier }o--o{ fact_gmp_document : "EU_SITE_REF"
+    dim_site_identifier }o--o| fact_warning_letter : "LETTER_ID"
+    dim_site_identifier }o--o{ fact_enforcement_action : "FEI"
+    dim_site_identifier }o--o| dim_watchlist_entry : "WATCH_ID"
+
+    dim_customer ||--o{ dim_watchlist_entry : "watches"
+    dim_watchlist_entry ||--o{ fact_alert : "receives"
+    fact_enforcement_action ||--o{ fact_alert : "triggers"
+    dim_site ||--o{ fact_alert : "site at alert time"
+
+    fact_warning_letter ||--o{ fact_letter_tag : "NLP tags"
+    match_review_queue }o--o| dim_site_identifier : "resolves into"
+
+    ingest_batch ||--o{ fact_inspection : "loaded from file"
+    ingest_batch ||--o{ fact_gmp_document : "loaded from file"
+    ingest_batch ||--o{ fact_warning_letter : "loaded from file"
+
+    dim_site {
+        text site_key PK "S-000001, our surrogate"
+        text site_name
+        char country_code
+        text city
+        text address
+        bool is_active "false after merge"
+    }
+    dim_site_identifier {
+        text identifier_type PK "FEI | EU_SITE_REF | LETTER_ID | WATCH_ID"
+        text identifier_value PK
+        timestamptz valid_from PK "SCD2"
+        timestamptz valid_to
+        bool is_current
+        text site_key FK
+        text match_method "EXACT_ID | RULE | FUZZY | STEWARD"
+        numeric match_score
+        jsonb match_evidence
+        text matching_rules_version
+        text decided_by
+        uuid decision_group_id "one per steward action"
+    }
+    fact_inspection {
+        text inspection_id PK "S1 natural key"
+        timestamptz valid_from PK "SCD2"
+        timestamptz valid_to
+        text record_status "ACTIVE | RETRACTED"
+        text fei_number "to bridge"
+        text firm_name_as_published
+        char country_code
+        date inspection_end_date
+        text classification "NAI | VAI | OAI"
+        uuid batch_id FK
+    }
+    fact_gmp_document {
+        text doc_ref PK "S2 natural key"
+        timestamptz valid_from PK "SCD2"
+        text record_status
+        text site_ref "to bridge"
+        text doc_type
+        text status "ACTIVE | WITHDRAWN (agency)"
+        date issued_date
+        uuid batch_id FK
+    }
+    fact_warning_letter {
+        text letter_id PK "S3 natural key"
+        timestamptz valid_from PK "SCD2"
+        text record_status
+        text fei_number "usually NULL"
+        text recipient_firm_as_published
+        text recipient_address_as_published
+        date issue_date
+        text body_s3_path
+        text nlp_status
+        uuid batch_id FK
+    }
+    fact_letter_tag {
+        text letter_id PK
+        text nlp_model_version PK
+        text tag PK
+        numeric confidence
+    }
+    fact_enforcement_action {
+        text action_id PK "S4"
+        int action_version PK "from agency; current = max"
+        text operation "UPSERT | RETRACT"
+        text action_type
+        text fei_number "to bridge"
+        text firm_name
+        date effective_date
+        timestamptz event_time
+        timestamptz loaded_at
+        text event_id
+    }
+    dim_customer {
+        text customer_id PK
+        text customer_name
+    }
+    dim_watchlist_entry {
+        bigint watch_id PK "S5 natural key"
+        timestamptz valid_from PK "SCD2"
+        text customer_id FK "RLS"
+        text supplier_name_as_typed
+        text fei_number_as_typed
+        bool is_active "false on CDC delete"
+        bigint cdc_timestamp
+    }
+    fact_alert {
+        uuid alert_id PK
+        text customer_id FK "RLS"
+        bigint watch_id FK
+        text site_key FK
+        text action_id
+        int action_version
+        timestamptz created_at
+        timestamptz delivered_at
+    }
+    match_review_queue {
+        uuid review_id PK
+        text identifier_type
+        text identifier_value
+        jsonb candidate_sites
+        text status "OPEN | LINKED | NEW_SITE | REJECTED"
+        uuid decision_group_id
+    }
+    ingest_batch {
+        uuid batch_id PK
+        text source_code "S1 | S2 | S3"
+        timestamptz received_at
+        text s3_path "immutable raw file"
+        text status
+        text parser_version
+        jsonb dq_checks
+    }

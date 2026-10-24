@@ -1,0 +1,43 @@
+ customer_id 
+ cust_042
+(1 row)
+ inspection_id | classification | record_status |        valid_from         |         valid_to          |               batch_id               
+ IN-2041187    | VAI            | ACTIVE        | 2026-10-05 11:30:00+05:30 | 2026-10-12 11:30:00+05:30 | 00000000-0000-0000-0000-000000000105
+(1 row)
+ site_key |            site_name            | match_method 
+ S-000001 | Acme Pharma Unit II, Sangareddy | EXACT_ID
+(1 row)
+ country_code |  quarter   | inspections_all | oai_rate_all_pct | inspections_watchlist | oai_rate_watchlist_pct 
+ IN           | 2026-07-01 |               2 |             50.0 |                     2 |                   50.0
+(1 row)
+
+--- U3 again for 2026-10-13 (after the correction) ---
+ classification | record_status 
+----------------+---------------
+ OAI            | ACTIVE
+(1 row)
+
+--- U3 for the retracted one, as of 10-08 vs today ---
+   as_of    | classification | record_status 
+------------+----------------+---------------
+ 2026-10-08 | OAI            | ACTIVE
+ today      | OAI            | RETRACTED
+(2 rows)
+
+--- S4: current state per action (duplicate e-88f1 was a no-op: 3 rows total) ---
+   action_id   | action_version | operation | event_id | fei_number 
+---------------+----------------+-----------+----------+------------
+ IA-66-40-0098 |              2 | UPSERT    | e-91c3   | 3004521877
+ RC-2026-1187  |              3 | RETRACT   | e-93aa   | 
+(2 rows)
+
+--- U1: everything we know about S-000001, each row traceable to its source ---
+     fact_type      |       fact_id       | fact_date  |                  outcome                  |  agency   |               batch_id               
+--------------------+---------------------+------------+-------------------------------------------+-----------+--------------------------------------
+ INSPECTION         | IN-2039902          | 2026-08-02 | NAI                                       | FDA       | 00000000-0000-0000-0000-000000000105
+ INSPECTION         | IN-2041187          | 2026-08-14 | OAI                                       | FDA       | 00000000-0000-0000-0000-000000000112
+ GMP_DOCUMENT       | EUGMP-NCR-2026-0412 | 2026-09-03 | ACTIVE                                    | ANSM (FR) | 00000000-0000-0000-0000-000000000201
+ WARNING_LETTER     | WL-320-26-118       | 2026-10-02 | CGMP/Finished Pharmaceuticals/Adulterated | FDA       | 00000000-0000-0000-0000-000000000302
+ ENFORCEMENT_ACTION | IA-66-40-0098       | 2026-10-11 | IMPORT_ALERT                              | FDA       | 
+(5 rows)
+

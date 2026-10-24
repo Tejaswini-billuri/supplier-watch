@@ -1,0 +1,110 @@
+---
+title: "Supplier Watch — Pipeline: originals (S3) → system of record (Postgres) → serving copies"
+config:
+  flowchart:
+    curve: basis
+    nodeSpacing: 35
+    rankSpacing: 70
+---
+flowchart LR
+    subgraph SRC["Sources"]
+        direction TB
+        S1["S1 · FDA inspections<br/>CSV, weekly"]
+        S2["S2 · EU GMP documents<br/>JSON, monthly"]
+        S3["S3 · Warning letters<br/>JSON + text, daily"]
+        S4["S4 · Enforcement events<br/>Kinesis"]
+        S5["S5 · Watchlist CDC<br/>Debezium → MSK"]
+    end
+
+    RAW[("Amazon S3<br/>raw originals · immutable")]
+
+    subgraph BATCH["Batch lane · EventBridge Scheduler → Step Functions → Fargate"]
+        direction LR
+        PARSE["Parse + normalise<br/>Python"] --> DIFF["Snapshot diff → SCD2<br/>SQL"]
+    end
+
+    subgraph LET["Letters lane · S3 event → SQS → Lambda"]
+        direction LR
+        LLAM["Letter intake<br/>Lambda"] --> NLP["NLP tagging<br/>Lambda → NLP API"]
+    end
+
+    subgraph STREAM["Streaming lane · Lambda consumers"]
+        direction TB
+        S4L["Apply enforcement event<br/>Lambda"]
+        S5L["Apply watchlist change<br/>Lambda"]
+        DLQ["DLQ + alarm"]
+        S4L -.-> DLQ
+    end
+
+    subgraph MODEL["System of record"]
+        direction TB
+        ER["Entity-resolution library<br/>Python"]
+        PG[("PostgreSQL on RDS<br/>12 tables · SCD2 · bridge")]
+        ER --> PG
+    end
+
+    STEW["Steward UI"]
+
+    subgraph SERVE["Serving copies"]
+        direction TB
+        DDB[("DynamoDB<br/>watcher lookup")]
+        ALQ["SQS → Lambda<br/>alert fan-out"]
+        OS[("OpenSearch<br/>letter search")]
+        SF[("Snowflake<br/>analytics marts")]
+    end
+
+    subgraph CONS["Consumers"]
+        direction TB
+        U2["U2 Alerts ≤ 5 min"]
+        U1["U1 Site profile ≤ 1 h"]
+        U3["U3 Point-in-time audit"]
+        U5["U5 Search ≤ 1 h"]
+        U4["U4 Analytics, daily"]
+        U6["U6 Stewardship"]
+    end
+
+    %% sources → originals
+    S1 --> RAW
+    S2 --> RAW
+    S3 --> RAW
+    S4 -->|"Kinesis · Firehose archive"| RAW
+    S5 -->|"MSK · Firehose archive"| RAW
+
+    %% originals → lanes
+    RAW -->|"S1, S2 files"| PARSE
+    RAW -->|"S3 event → SQS"| LLAM
+    RAW -->|"S4 events"| S4L
+    RAW -->|"S5 events"| S5L
+
+    %% lanes → record
+    DIFF --> MODEL
+    NLP --> MODEL
+    S4L --> MODEL
+    S5L --> MODEL
+
+    %% hot path
+    S4L -->|"look up watchers"| DDB
+    S4L --> ALQ
+    S5L -->|"delete / add watcher now"| DDB
+    ALQ --> PG
+
+    %% record → copies
+    PG -->|"outbox → publish"| DDB
+    PG -->|"outbox → publish"| OS
+    PG -->|"nightly export"| SF
+    STEW --> PG
+
+    %% copies → consumers
+    ALQ --> U2
+    PG --> U1
+    PG --> U3
+    OS --> U5
+    SF --> U4
+    STEW --> U6
+
+    classDef store fill:#eef3ff,stroke:#3b5bdb,stroke-width:1.5px
+    classDef hot fill:#fff4e6,stroke:#e8590c,stroke-width:1.5px
+    classDef record fill:#e6fcf5,stroke:#0ca678,stroke-width:2px
+    class RAW,OS,SF store
+    class S4L,S5L,ALQ,DDB,U2 hot
+    class PG record
