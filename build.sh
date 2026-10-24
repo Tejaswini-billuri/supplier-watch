@@ -16,9 +16,8 @@ def code(p, lang): return f"```{lang}\n{pathlib.Path(p).read_text().rstrip()}\n`
 main = ["# Supplier Watch — Senior Data Engineer take-home\n\n"
         "Submission document. Reference material (full data dictionary, full DDL, sample data, query output) is in the separate appendix; "
         "every file is also in the repository (`README.md`).\n\n"
-        "## Contents\n\n1. Key decisions at a glance\n2. Part A — Data model\n3. Part B — Model rationale\n4. Part C — Pipeline architecture\n"
-        "5. Part D — Pipeline rationale\n6. Assumptions, AI usage, time spent\n\n---\n\n",
-        md("00_decision_log.md"), "\n\n---\n\n"]
+        "## Contents\n\n1. Part A — Data model\n2. Part B — Model rationale\n3. Part C — Pipeline architecture\n"
+        "4. Part D — Pipeline rationale\n5. Assumptions, AI usage, time spent\n\n---\n\n"]
 a = md("01_entity_model.md").replace("# Part A.1 — Data model", "# Part A — Data model\n\n## A.1 Entity diagram\n\n![Entity model](diagrams/entity_model.png)\n")
 main.append(a + "\n\n## A.2 Schema definitions: the five core tables\n\nFull schema (35 statements, executed on PostgreSQL 17) in appendix B.\n\n" + code("02_ddl_core.sql", "sql")
             + "\n## A.4 Queries for U2, U3, U4\n\nExecuted against the brief's sample data; actual output in appendix D.\n\n" + code("04_queries.sql", "sql") + "\n---\n\n")

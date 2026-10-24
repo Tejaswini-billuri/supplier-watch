@@ -4,34 +4,11 @@ Submission document. Reference material (full data dictionary, full DDL, sample 
 
 ## Contents
 
-1. Key decisions at a glance
-2. Part A — Data model
-3. Part B — Model rationale
-4. Part C — Pipeline architecture
-5. Part D — Pipeline rationale
-6. Assumptions, AI usage, time spent
-
----
-
-# Key decisions at a glance
-
-One line per decision: what I chose, why, and what I rejected. The rest of the document is the detail behind each row.
-
-| Decision | Why | Rejected alternative |
-|------------------------------|--------------------------------------|------------------------|
-| **Facts are stored per agency, keyed by the agency's own ID, as SCD Type 2 versions.** A correction is a new version; a retraction is a version marked `RETRACTED`. Nothing is overwritten. | Agencies silently correct and delete. U3 asks "what did we show on date X", which needs every version kept. One range filter answers it. | Overwrite in place and keep an audit log. Loses the ability to query the past directly. |
-| **A site is a versioned opinion.** Facts never carry `site_key`; a bridge table maps each agency identifier to our site, with history. | Identity is a decision that changes (merges, splits, better rules). Changing a few bridge rows is cheap and reversible; rewriting millions of fact rows is neither. | `site_key` on every fact row. Simpler star; merges become mass updates with no history. |
-| **PostgreSQL is the operational system of record; Snowflake is the analytical copy.** | The product has OLTP work (profile pages, per-event writes, merges, alert dedupe) and OLAP work (daily aggregates). Each gets the right engine. Postgres also enforces "one identifier → one site at a time". | Snowflake as the only store. Fine for analytics; unenforced constraints and app-facing latency/cost for the operational side. |
-| **Every source lands in S3 first, unmodified, forever.** | The brief requires replay without re-fetching. Raw originals are the only way to re-run a parser or a matching rule later. | Load directly into the database. Cheaper today; no replay. |
-| **S1/S2 snapshots are diffed against current rows in SQL** to produce INSERT / CORRECT / RETRACT. | The sources give no change flags. A set comparison is the natural way to find silent corrections and vanished rows, and it is a few hundred lines of testable SQL. | Treat snapshots as a stream of row events. Adds machinery, removes nothing. |
-| **S4: current state = highest `version`; duplicates rejected by primary key; RETRACT stored as a tombstone.** | Order-safe by construction. A late v1 is stored but never current. Idempotency lives in the database, so Lambda retries are safe. | Consumer-side state or in-memory dedupe. Breaks on restart. |
-| **Only S4 and S5 are streamed, through Lambda; no 24/7 cluster.** | Only U2 needs minutes. At 5k events/day a Flink cluster is a standing cost the brief asks us to justify, and we cannot. Both paths share one entity-resolution library. | Kappa (everything a stream) or Lambda architecture (two paths computing the same views). Neither fits weekly snapshots. |
-| **Entity resolution is conservative: auto-link ≥ 0.95, human review 0.75–0.95, new site below.** Unit-number mismatch caps the score. | The brief ranks a wrong merge above a delay. A review queue costs steward time; a wrong merge costs customer trust. Unit I vs Unit II in the sample is exactly the trap. | Auto-link everything above a single threshold. Faster, and wrong in the one case the brief highlights. |
-| **Alert fan-out reads a DynamoDB `site → watchers` lookup and writes `fact_alert` with a unique key.** | Millisecond lookup at 200 events/s without a Postgres connection in the hot path; the unique key makes the duplicate event a no-op. S5 deletes update the lookup in the same Lambda, so alerts stop immediately. | Query Postgres per event. Works at today's load; the first thing to fall over at 10x. |
-| **NLP tagging is fully decoupled: letters are searchable immediately, tags arrive later via a rate-limited queue with retries and a DLQ.** | The API is slow (5–60 s), rate-limited (5 rps) and fails 2% of the time. None of that should block search. | Tag synchronously on intake. One slow call blocks a letter. |
-| **A batch loads completely or not at all; a retraction rate above 2% quarantines it.** | A truncated file looks exactly like mass retractions. Keeping last week's data live is better than showing half a snapshot. | Load what parses. Produces partial, silently wrong states. |
-| **Build order: raw landing on day 1, alerts by week 4, entity resolution and quality by week 6; defer S2, NLP, marts, steward UI.** | Append-only landing is cheap and starts history accumulating; alerts are what customers pay for; quality tooling improves a product that already exists. | Build the full model first. Nothing ships for six weeks. |
-
+1. Part A — Data model
+2. Part B — Model rationale
+3. Part C — Pipeline architecture
+4. Part D — Pipeline rationale
+5. Assumptions, AI usage, time spent
 
 ---
 
