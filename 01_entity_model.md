@@ -1,6 +1,6 @@
 # Part A.1 — Data model
 
-## The idea in three sentences
+## Data model ideation
 
 1. **Facts are what agencies told us.** One `fact_` table per source. Rows are never overwritten:
    every correction is a new SCD2 version, every retraction is a row marked `RETRACTED`.
@@ -10,18 +10,13 @@
    as SCD2. Merging or splitting sites only changes bridge rows, never facts, and the old
    mapping is kept as history.
 
-Everything a customer sees is a join: `fact → dim_site_identifier → dim_site`.
+Everything a customer sees is a join: `fact → dim_site_identifier → dim_site`. That one join is the
+model's only snowflake; it exists because identity decisions change and facts should not. The
+analytics marts flatten it away into a plain star.
 
-## Star or snowflake?
+## Model details
 
-- **Core model (Postgres, system of record):** a star with one deliberate snowflake. Facts
-  don't carry `site_key`; they carry the agency identifier, and the bridge resolves it.
-  Reason: identity decisions change (merges, splits, better matching rules). Updating a few
-  hundred bridge rows is cheap and keeps history; rewriting millions of fact rows is neither.
-- **Analytics marts (Snowflake warehouse, U4):** a pure star. The nightly load flattens
-  through the bridge and puts `site_key`, `country_code`, `quarter` directly on the fact.
-
-## SCD2 convention used everywhere
+Every versioned table uses the same three columns:
 
 | Column | Meaning |
 |---|---|
@@ -31,7 +26,7 @@ Everything a customer sees is a join: `fact → dim_site_identifier → dim_site
 
 "What did we show on 2026-10-08?" = `WHERE valid_from <= '2026-10-08' AND valid_to > '2026-10-08'`.
 
-## The 12 tables, one line each
+The 12 tables:
 
 | Table | Grain | Keyed by | History |
 |---|---|---|---|
